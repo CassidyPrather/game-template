@@ -19,6 +19,12 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history and tags for version detection
 
+      - name: Install native audio dependencies
+        # macroquad's `audio` feature pulls in quad-alsa-sys, which links
+        # -lasound. The runner image ships libasound.so.2 but not the .so
+        # symlink the linker needs, so native builds fail without this.
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -146,6 +152,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history and tags for version detection
+
+      - name: Install native audio dependencies
+        # Linux only: quad-alsa-sys needs the libasound .so symlink to link.
+        # macOS and Windows get their audio backend from the system SDK.
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
