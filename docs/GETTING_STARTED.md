@@ -39,7 +39,6 @@ delusions (egui), things that are really a shader (wgpu). Pick early.
 ## Shaders and Techniques
 
 - [Shadertoy](https://www.shadertoy.com/) — the ideal zero-setup shader-fidget environment
-- [Inigo Quilez](https://iquilezles.org/articles/) — SDFs; the parameterized-primitives brain applied to shaders
 - [The Book of Shaders](https://thebookofshaders.com/) — gentler on-ramp
 - [Red Blob Games](https://www.redblobgames.com/) — interactive explainers (pathfinding, hexes, procgen); also a model of the form
 - [Game Programming Patterns](https://gameprogrammingpatterns.com/) — the game loop and update method chapters are this template's theory
