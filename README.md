@@ -14,7 +14,10 @@ loaded, so there are no audio assets to ship or credit. `M` mutes.
 
 ## Development
 
-Requires [Rust](https://rustup.rs/)
+Requires [Rust](https://rustup.rs/). Native builds on Linux also need ALSA's
+development files (`libasound2-dev` on Debian/Ubuntu, `alsa-lib-devel` on
+Fedora) — without them the link step fails with `unable to find library
+-lasound`. The wasm build needs none of this; the browser handles audio.
 
 Build: `cargo build`
 
