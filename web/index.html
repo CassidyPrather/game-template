@@ -84,9 +84,15 @@
     </noscript>
     <canvas id="glcanvas" tabindex="1"></canvas>
     <!-- gl.js is miniquad's loader, vendored from the miniquad crate (see CREDITS.md).
-         It grabs #glcanvas at parse time, so it must come after the canvas. If a toy
-         enables macroquad's `audio` feature, add quad-snd's audio.js plugin alongside. -->
+         It grabs #glcanvas at parse time, so it must come after the canvas. -->
     <script src="gl.js"></script>
+    <!-- audio.js is quad-snd's miniquad plugin, vendored likewise; macroquad's `audio`
+         feature is useless on the web without it. Order is load-bearing: it calls
+         gl.js's miniquad_add_plugin() at parse time, and its imports have to be
+         registered before load() instantiates the wasm below. It also installs the
+         first-gesture handler that resumes the audio context, which browsers keep
+         suspended until the user presses something. -->
+    <script src="audio.js"></script>
     <script>
         "use strict";
         const status = document.getElementById("status");

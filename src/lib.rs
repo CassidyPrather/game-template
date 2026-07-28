@@ -8,6 +8,7 @@
 //! `cargo bench` at whatever speed the CPU allows.
 
 pub mod sim;
+pub mod synth;
 
 /// `git describe` version, embedded by `build.rs`.
 pub const VERSION: &str = env!("GIT_DESCRIBE_VERSION");

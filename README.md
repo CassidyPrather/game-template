@@ -6,6 +6,12 @@ Rust + [macroquad](https://macroquad.rs/), compiled to wasm, deployed as a
 static page. Based on [rust-template](https://github.com/CassidyPrather/rust-template)
 Native desktop builds work too.
 
+Sound is wired up and works in the browser, which is fiddlier than it sounds:
+it needs macroquad's `audio` feature, quad-snd's `audio.js` plugin in `web/`,
+and something to do about browsers refusing to make noise before the user
+clicks. The effects themselves are synthesised in `src/synth.rs` rather than
+loaded, so there are no audio assets to ship or credit. `M` mutes.
+
 ## Development
 
 Requires [Rust](https://rustup.rs/)

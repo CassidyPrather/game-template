@@ -15,10 +15,23 @@ mkdir -p "$OUT"
 cp web/* "$OUT/"
 cp "target/wasm32-unknown-unknown/release/${BIN}.wasm" "$OUT/"
 
+# rustc's wasm32-unknown-unknown baseline emits these six post-MVP features
+# (`rustc --print cfg --target wasm32-unknown-unknown` lists them). wasm-opt
+# only enables them by default in newer binaryen, and refuses to validate its
+# input without them — so name them explicitly and work with any version.
+WASM_FEATURES=(
+    --enable-bulk-memory
+    --enable-multivalue
+    --enable-mutable-globals
+    --enable-nontrapping-float-to-int
+    --enable-reference-types
+    --enable-sign-ext
+)
+
 wasm="${OUT}/${BIN}.wasm"
 before=$(wc -c <"$wasm")
 if command -v wasm-opt >/dev/null 2>&1; then
-    wasm-opt -Oz --strip-debug --strip-producers "$wasm" -o "$wasm"
+    wasm-opt -Oz --strip-debug --strip-producers "${WASM_FEATURES[@]}" "$wasm" -o "$wasm"
     echo "wasm-opt: ${before} -> $(wc -c <"$wasm") bytes"
 else
     # binaryen provides wasm-opt; CI always runs it, so this only costs you locally

@@ -1,8 +1,12 @@
-//! macroquad frontend: input in, circles out.
+//! macroquad frontend: input in, circles and sound out.
 //!
 //! Everything that decides what happens lives in [`game_template::sim`]. This
-//! file only translates between the window and the sim's logical world.
+//! file only translates between the window and the sim's logical world; the
+//! sim's [`Cue`](game_template::sim::Cue)s become sound over in [`audio`].
 
+mod audio;
+
+use audio::Audio;
 use macroquad::color::{Color, hsl_to_rgb};
 use macroquad::input::{
     KeyCode, MouseButton, is_key_pressed, is_mouse_button_down, is_mouse_button_pressed,
@@ -18,6 +22,8 @@ use game_template::sim::{InputFrame, Sim, Vec2, WORLD_H, WORLD_W};
 
 const BACKGROUND: Color = Color::new(0.05, 0.05, 0.07, 1.0);
 const OVERLAY: Color = Color::new(0.85, 0.85, 0.90, 0.75);
+/// For the one HUD line that is asking for something rather than reporting.
+const HIGHLIGHT: Color = Color::new(1.0, 0.83, 0.42, 0.95);
 const TEXT_SIZE: f32 = 18.0;
 const TEXT_MARGIN: f32 = 12.0;
 
@@ -34,12 +40,17 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut sim = Sim::new(fresh_seed());
+    let mut audio = Audio::load().await;
 
     loop {
         let view = View::fit(screen_width(), screen_height());
         let input = gather_input(&view);
-        sim.advance(get_frame_time(), &input);
-        draw(&sim, &view);
+        let toggle_mute = is_key_pressed(KeyCode::M);
+        let dt = get_frame_time();
+
+        sim.advance(dt, &input);
+        audio.update(dt, sim.cues(), &input, toggle_mute);
+        draw(&sim, &view, &audio);
         next_frame().await;
     }
 }
@@ -92,7 +103,7 @@ fn gather_input(view: &View) -> InputFrame {
     }
 }
 
-fn draw(sim: &Sim, view: &View) {
+fn draw(sim: &Sim, view: &View, audio: &Audio) {
     clear_background(BACKGROUND);
 
     let alpha = sim.alpha();
@@ -108,12 +119,25 @@ fn draw(sim: &Sim, view: &View) {
 
     let state = if sim.is_paused() { "paused" } else { "running" };
     let lines = [
-        format!("{} {VERSION}", env!("CARGO_PKG_NAME")),
-        format!("seed {:016x} - {state}", sim.seed()),
-        "drag: attract | click: burst | space: pause | R: reseed".to_owned(),
+        (format!("{} {VERSION}", env!("CARGO_PKG_NAME")), OVERLAY),
+        (format!("seed {:016x} - {state}", sim.seed()), OVERLAY),
+        (
+            format!("audio: {}", audio.status()),
+            // Highlighted only while it needs a press, so the web build
+            // explains its own silence instead of looking broken.
+            if audio.needs_gesture() {
+                HIGHLIGHT
+            } else {
+                OVERLAY
+            },
+        ),
+        (
+            "drag: attract | click: burst | space: pause | R: reseed | M: mute".to_owned(),
+            OVERLAY,
+        ),
     ];
-    for (row, line) in lines.iter().enumerate() {
+    for (row, (line, color)) in lines.iter().enumerate() {
         let baseline = TEXT_SIZE.mul_add(row as f32, TEXT_MARGIN + TEXT_SIZE);
-        draw_text(line, TEXT_MARGIN, baseline, TEXT_SIZE, OVERLAY);
+        draw_text(line, TEXT_MARGIN, baseline, TEXT_SIZE, *color);
     }
 }

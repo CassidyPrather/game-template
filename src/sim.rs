@@ -8,6 +8,10 @@
 //! Time is fixed-step with an accumulator (the classic "Fix Your Timestep"
 //! shape): [`Sim::advance`] runs whole [`TICK_DT`] steps and leaves the
 //! leftover fraction in [`Sim::alpha`] for the renderer to interpolate with.
+//!
+//! Sound follows the same rule as pixels: the sim reports that something
+//! happened and how hard, as a [`Cue`], and the frontend decides what that
+//! sounds like. No audio types cross into this module either.
 
 use std::ops::{Add, AddAssign, Mul, MulAssign, Sub};
 
@@ -59,6 +63,18 @@ const RADIUS_MIN: f32 = 1.5;
 
 /// Spread of spawned particle radii above [`RADIUS_MIN`].
 const RADIUS_SPAN: f32 = 2.5;
+
+/// Speed a particle must carry into a wall for the hit to count as audible.
+/// Particles pinned against a boundary by the pointer graze it every tick at
+/// almost no speed; those are not impacts and must not be heard.
+const IMPACT_SPEED: f32 = 120.0;
+
+/// Simultaneous audible wall hits that saturate [`Cue::Impact`].
+const IMPACT_FULL: f32 = 80.0;
+
+/// Quiet period after an impact cue, in seconds of sim time. Six hundred
+/// particles raining on a wall would otherwise cue every single tick.
+const IMPACT_COOLDOWN: f32 = 0.05;
 
 /// A 2D vector, kept deliberately tiny: the sim needs four operations and a
 /// length, and pulling in a math crate for that would be silly.
@@ -166,6 +182,23 @@ pub struct InputFrame {
     pub reseed: Option<u64>,
 }
 
+/// Something that happened and is worth hearing. The sim says what and how
+/// hard; choosing a waveform is the frontend's job.
+///
+/// Intensities are `0..=1` so the frontend can map them to gain without
+/// knowing any of the sim's units.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Cue {
+    /// A burst moved particles. Intensity is the share of the world it shoved.
+    Burst { intensity: f32 },
+    /// Particles struck a wall together. Intensity rises with how many.
+    Impact { intensity: f32 },
+    /// Pause was toggled. `paused` is the state just entered.
+    Pause { paused: bool },
+    /// The world was replaced.
+    Reseed,
+}
+
 /// The simulation. Same seed plus same [`InputFrame`] sequence gives
 /// bit-identical states on every run.
 #[derive(Clone, Debug)]
@@ -175,6 +208,9 @@ pub struct Sim {
     particles: Vec<Particle>,
     accumulator: f32,
     paused: bool,
+    cues: Vec<Cue>,
+    /// Sim-time left before another [`Cue::Impact`] may fire.
+    impact_cooldown: f32,
 }
 
 impl Sim {
@@ -189,6 +225,8 @@ impl Sim {
             particles,
             accumulator: 0.0,
             paused: false,
+            cues: Vec::new(),
+            impact_cooldown: 0.0,
         }
     }
 
@@ -217,6 +255,13 @@ impl Sim {
         self.accumulator / TICK_DT
     }
 
+    /// What the most recent [`Sim::advance`] produced worth hearing. Valid
+    /// until the next call, which clears it.
+    #[must_use]
+    pub fn cues(&self) -> &[Cue] {
+        &self.cues
+    }
+
     /// Throw away all state and start over from `seed`.
     pub fn reseed(&mut self, seed: u64) {
         let paused = self.paused;
@@ -227,11 +272,20 @@ impl Sim {
     /// Consume one frame's worth of real time, returning how many fixed ticks
     /// ran. `frame_dt` is clamped to [`MAX_FRAME_DT`].
     pub fn advance(&mut self, frame_dt: f32, input: &InputFrame) -> u32 {
+        // Cues describe this frame only; last frame's have been consumed.
+        self.cues.clear();
+
         if let Some(seed) = input.reseed {
+            // Note the ordering: reseeding rebuilds `self`, cue list included,
+            // so the cue has to be pushed after it rather than before.
             self.reseed(seed);
+            self.cues.push(Cue::Reseed);
         }
         if input.toggle_pause {
             self.paused = !self.paused;
+            self.cues.push(Cue::Pause {
+                paused: self.paused,
+            });
         }
         if self.paused {
             return 0;
@@ -240,7 +294,10 @@ impl Sim {
         // Impulses are per-frame events, not per-tick ones: applying a burst
         // inside the loop would multiply it by the frame's tick count.
         if input.burst {
-            self.burst(input.pointer);
+            let intensity = self.burst(input.pointer);
+            if intensity > 0.0 {
+                self.cues.push(Cue::Burst { intensity });
+            }
         }
 
         self.accumulator += frame_dt.clamp(0.0, MAX_FRAME_DT);
@@ -258,6 +315,7 @@ impl Sim {
 
     /// One fixed step.
     fn tick(&mut self, input: &InputFrame) {
+        let mut hits = 0_usize;
         for particle in &mut self.particles {
             particle.prev_pos = particle.pos;
 
@@ -275,13 +333,26 @@ impl Sim {
             particle.vel *= DAMPING;
             particle.pos += particle.vel * TICK_DT;
 
-            bounce(&mut particle.pos.x, &mut particle.vel.x, WORLD_W);
-            bounce(&mut particle.pos.y, &mut particle.vel.y, WORLD_H);
+            let struck = bounce(&mut particle.pos.x, &mut particle.vel.x, WORLD_W)
+                + bounce(&mut particle.pos.y, &mut particle.vel.y, WORLD_H);
+            if struck >= IMPACT_SPEED {
+                hits += 1;
+            }
+        }
+
+        self.impact_cooldown = (self.impact_cooldown - TICK_DT).max(0.0);
+        if hits > 0 && self.impact_cooldown <= 0.0 {
+            self.impact_cooldown = IMPACT_COOLDOWN;
+            self.cues.push(Cue::Impact {
+                intensity: (hits as f32 / IMPACT_FULL).min(1.0),
+            });
         }
     }
 
     /// Radial shove centred on `at`, fading to nothing at [`BURST_RADIUS`].
-    fn burst(&mut self, at: Vec2) {
+    /// Returns the share of the world it moved, in `0..=1`.
+    fn burst(&mut self, at: Vec2) -> f32 {
+        let mut moved = 0_usize;
         for particle in &mut self.particles {
             let offset = particle.pos - at;
             let dist = offset.length().max(MIN_DIST);
@@ -292,19 +363,25 @@ impl Sim {
             // A little per-particle jitter so repeat clicks never look canned.
             let jitter = self.rng.f32().mul_add(0.4, 0.8);
             particle.vel += offset * (BURST_IMPULSE * falloff * jitter / dist);
+            moved += 1;
         }
+        moved as f32 / PARTICLE_COUNT as f32
     }
 }
 
-/// Clamp one axis into `0..=limit`, reflecting velocity on contact.
-fn bounce(pos: &mut f32, vel: &mut f32, limit: f32) {
+/// Clamp one axis into `0..=limit`, reflecting velocity on contact. Returns
+/// the speed the wall absorbed, or zero if the particle never reached it.
+fn bounce(pos: &mut f32, vel: &mut f32, limit: f32) -> f32 {
     if *pos < 0.0 {
         *pos = 0.0;
-        *vel = -*vel * RESTITUTION;
     } else if *pos > limit {
         *pos = limit;
-        *vel = -*vel * RESTITUTION;
+    } else {
+        return 0.0;
     }
+    let speed = vel.abs();
+    *vel = -*vel * RESTITUTION;
+    speed
 }
 
 /// Draw one particle's worth of randomness. Call order matters for
@@ -461,6 +538,97 @@ mod tests {
         );
         assert_eq!(sim.seed(), 6);
         assert_ne!(positions(&sim), before);
+    }
+
+    #[test]
+    fn burst_cues_report_what_it_moved() {
+        let mut sim = Sim::new(3);
+        // Zero dt runs no ticks, so the burst cue is the only one possible
+        sim.advance(
+            0.0,
+            &InputFrame {
+                pointer: Vec2::new(WORLD_W * 0.5, WORLD_H * 0.5),
+                burst: true,
+                ..InputFrame::default()
+            },
+        );
+        let [Cue::Burst { intensity }] = sim.cues() else {
+            panic!("expected one burst cue, got {:?}", sim.cues());
+        };
+        assert!(
+            (0.0..=1.0).contains(intensity),
+            "intensity {intensity} is outside the contract"
+        );
+        assert!(*intensity > 0.0, "a burst mid-world should move something");
+    }
+
+    #[test]
+    fn pause_and_reseed_announce_themselves() {
+        let mut sim = Sim::new(7);
+        let toggle = InputFrame {
+            toggle_pause: true,
+            ..InputFrame::default()
+        };
+
+        sim.advance(TICK_DT, &toggle);
+        assert_eq!(sim.cues(), [Cue::Pause { paused: true }]);
+        sim.advance(TICK_DT, &toggle);
+        assert_eq!(sim.cues(), [Cue::Pause { paused: false }]);
+
+        sim.advance(
+            TICK_DT,
+            &InputFrame {
+                reseed: Some(6),
+                ..InputFrame::default()
+            },
+        );
+        assert_eq!(sim.cues(), [Cue::Reseed]);
+    }
+
+    #[test]
+    fn cues_do_not_outlive_the_frame_that_made_them() {
+        let mut sim = Sim::new(7);
+        sim.advance(
+            TICK_DT,
+            &InputFrame {
+                reseed: Some(6),
+                ..InputFrame::default()
+            },
+        );
+        assert!(!sim.cues().is_empty());
+
+        sim.advance(TICK_DT, &InputFrame::default());
+        assert!(sim.cues().is_empty(), "stale cues: {:?}", sim.cues());
+    }
+
+    #[test]
+    fn impact_cues_are_rate_limited() {
+        const TICKS: usize = 300;
+
+        let mut sim = Sim::new(11);
+        // Pointer just outside a wall: close enough for the inverse-linear
+        // pull to really fling particles at it, which is the worst case.
+        let input = attract_at(WORLD_W + 10.0, WORLD_H * 0.5);
+
+        let mut impacts = 0;
+        for _ in 0..TICKS {
+            sim.advance(TICK_DT, &input);
+            impacts += sim
+                .cues()
+                .iter()
+                .filter(|cue| matches!(cue, Cue::Impact { .. }))
+                .count();
+        }
+
+        assert!(impacts > 0, "600 particles hit a wall and made no sound");
+        // Without the cooldown this would be one cue per tick, and 600
+        // particles raining on a wall would sound like a dial-up modem.
+        let seconds = TICK_DT * TICKS as f32;
+        let ceiling = seconds / IMPACT_COOLDOWN;
+        assert!(
+            impacts as f32 <= ceiling,
+            "{impacts} impact cues in {seconds}s, over the {ceiling} the cooldown allows"
+        );
     }
 
     #[test]

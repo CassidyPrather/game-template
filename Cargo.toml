@@ -25,8 +25,11 @@ name = "sim_bench"
 harness = false
 
 [dependencies]
-# default = [] upstream: no audio backend unless you ask for it
-macroquad = "0.4"
+# `audio` is off in macroquad's default features; the web build also needs
+# quad-snd's audio.js plugin in web/ (see CREDITS.md). It costs ~300 bytes of
+# wasm: on the web quad-snd is a few extern declarations and the browser does
+# the decoding, so the heavy native decoders never reach this target.
+macroquad = { version = "0.4", features = ["audio"] }
 fastrand = "2"
 
 [dev-dependencies]

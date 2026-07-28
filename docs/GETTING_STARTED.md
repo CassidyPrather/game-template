@@ -28,9 +28,14 @@ delusions (egui), things that are really a shader (wgpu). Pick early.
 
 ## Sounds
 
+The template starts with none of these: `src/synth.rs` generates its effects
+from arithmetic, which costs no payload and no credits line. Worth outgrowing
+the moment a toy wants real sound design.
+
 - [freesound](https://freesound.org/) — filter to CC0
 - [Sonniss GDC bundles](https://sonniss.com/gameaudiogdc) — royalty-free, enormous
 - [jsfxr](https://sfxr.me/) — generate retro SFX; perfect at toy scale
+- [musicdsp.org](https://www.musicdsp.org/) — the old archive of DSP snippets, if you keep synthesising instead
 
 ## Fonts
 
@@ -58,8 +63,7 @@ Not in the template. Add per toy.
 
 - [quad-storage](https://github.com/optozorax/quad-storage) — localStorage persistence; background-tick toys compute elapsed time on load, no server needed
 - [quad-url](https://github.com/optozorax/quad-url) — URL params, so seeds become shareable links
-- quad-snd `audio.js` — audio needs the macroquad `audio` feature enabled *and* the miniquad plugin js dropped into `web/`
-- [binaryen / wasm-opt](https://github.com/WebAssembly/binaryen) — what shrinks the wasm; CI assumes it
+- [binaryen / wasm-opt](https://github.com/WebAssembly/binaryen) — what shrinks the wasm; CI assumes it. Name the wasm features explicitly (`build-web.sh` does) — rustc emits post-MVP instructions that older wasm-opt refuses to validate without being told they are allowed
 - [Are we game yet](https://arewegameyet.rs/) — ecosystem index
 
 ## Licensing

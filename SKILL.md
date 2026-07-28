@@ -13,10 +13,15 @@ static page. Native desktop builds also work. Crate `game-template`, lib
 
 - `src/sim.rs` — the simulation. Pure, deterministic, no macroquad. Most work
   belongs here.
+- `src/synth.rs` — procedural sound effects as WAV bytes. Also pure, also
+  unit-tested; the toy ships no audio assets.
 - `src/main.rs` — thin macroquad frontend. Window, draw calls, input gathering.
+- `src/audio.rs` — the other half of the frontend: turns `sim::Cue`s into
+  playback. Binary-crate module, not part of the library.
 - `build.rs` — embeds a `git describe` version string.
-- `web/index.html`, `web/gl.js` — the static shell and the vendored miniquad
-  loader. Zero external requests; honors `prefers-color-scheme` and
+- `web/index.html`, `web/gl.js`, `web/audio.js` — the static shell, the
+  vendored miniquad loader, and the vendored quad-snd audio plugin. Zero
+  external requests; honors `prefers-color-scheme` and
   `prefers-reduced-motion`.
 - `scripts/build-web.sh` — wasm build → `dist/web/`.
 - `.github/workflows/ci-cd.yml` — lint, test, audit, size-budgeted web bundle,
@@ -52,6 +57,12 @@ Do not read wall-clock time, macroquad state, or randomness from inside
 `src/sim.rs`. If the frontend needs to tell the sim something, it goes in
 `InputFrame`.
 
+The sim has two output channels, and sound uses the second one exactly the way
+rendering uses the first: `Sim::particles()` for what to draw, `Sim::cues()`
+for what to play. A `Cue` says what happened and how hard, in `0..=1`, never
+what it should sound like. Cues live for one `advance()` and are cleared by
+the next.
+
 ## House Rules
 
 Every asset gets a `CREDITS.md` line at intake — source, author, license, URL.
@@ -60,7 +71,20 @@ CC0 first.
 CI enforces a hard wasm size budget (`MAX_WASM_BYTES`, ~1.5 MB by default);
 if a change blows it, shrink the change or retune the budget deliberately.
 
-Audio is off by default. Enabling the macroquad `audio` feature also requires
-adding the quad-snd `audio.js` miniquad plugin to `web/`.
+Audio is on: macroquad's `audio` feature plus quad-snd's `audio.js` plugin in
+`web/`, which must load after `gl.js` and before `load()` runs. Sounds are
+synthesised in `src/synth.rs` rather than loaded, so there are no audio assets
+and nothing to credit. macroquad gives you volume and looping and no pitch
+control, so pitch variation means baking another buffer.
+
+Browsers keep the audio context suspended until a real gesture. `audio.js`
+handles the resume; the looping drone additionally waits for the first press
+so it never starts mid-note, and the HUD says `press or click to start` until
+it does. Anything long-lived and looping needs the same treatment.
+
+Two independent decoders read `synth`'s bytes — `audrey` natively and the
+browser's `decodeAudioData` on the web — and the web one reports failure by
+never calling back, which hangs macroquad's loader on a black screen. That is
+why `synth.rs` has header tests.
 
 See `docs/GETTING_STARTED.md` for framework and asset-source links.
