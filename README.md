@@ -82,5 +82,24 @@ Pre-commit hook: `git config core.hooksPath .githooks` (runs `cargo fmt`)
    ./scripts/build-web.sh
    ```
 
+### Replacing the demo
+
+The fidget exists so the template ships exercised, not because it is precious.
+Its full blast radius, in gutting order:
+
+1. `src/sim.rs` — replace wholesale. Keep the shape: seed and `InputFrame` in,
+   fixed ticks, `particles()`/`cues()` and an interpolation alpha out.
+   Turn-based toys can swap the accumulator for one-command-per-advance; the
+   determinism contract does not care.
+2. `src/synth.rs` — replace the sound recipes; keep the header tests, which
+   exist because the browser hangs instead of erroring on a bad header.
+3. `src/main.rs` and `src/audio.rs` — `gather_input`, `draw`, and the
+   cue-to-sound mapping are demo-specific. `window_conf`, the main loop, the
+   `View` letterboxing, and the mute/resume plumbing are genre-agnostic.
+4. `benches/sim_bench.rs` — rewrite against your sim's hot path.
+
+Nothing else references the demo. Keep new logic in the sim like the old logic
+was: modules that import macroquad panic under `cargo test` (see SKILL.md).
+
 See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for generated tips: Frameworks, asset
 sources, shader references, and so on and so forth.
