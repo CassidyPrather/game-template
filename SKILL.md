@@ -63,6 +63,11 @@ for what to play. A `Cue` says what happened and how hard, in `0..=1`, never
 what it should sound like. Cues live for one `advance()` and are cleared by
 the next.
 
+The wider rule: any module that imports macroquad is untestable — macroquad's
+globals panic under `cargo test` (a thread assert), they do not fail politely.
+Logic you want tested must live macroquad-free like `sim` and `synth` do;
+frontend modules get verified by bot playouts or eyeballs.
+
 ## House Rules
 
 Every asset gets a `CREDITS.md` line at intake — source, author, license, URL.
