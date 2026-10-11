@@ -14,10 +14,11 @@ loaded, so there are no audio assets to ship or credit. `M` mutes.
 
 ## Development
 
-Requires [Rust](https://rustup.rs/). Native builds on Linux also need ALSA's
-development files (`libasound2-dev` on Debian/Ubuntu, `alsa-lib-devel` on
-Fedora) — without them the link step fails with `unable to find library
--lasound`. The wasm build needs none of this; the browser handles audio.
+Requires [Rust](https://rustup.rs/); `rust-toolchain.toml` pins the version
+(1.99.0), and rustup installs it on first build. Native builds on Linux also
+need ALSA's development files (`libasound2-dev` on Debian/Ubuntu,
+`alsa-lib-devel` on Fedora) — without them the link step fails with `unable to
+find library -lasound`. The wasm build needs none of this; the browser handles audio.
 
 Build: `cargo build`
 
@@ -36,6 +37,10 @@ Web build: `./scripts/build-web.sh` (needs
 [binaryen](https://github.com/WebAssembly/binaryen) if installed)
 
 Serve the result: `python3 -m http.server --directory dist/web 8080`
+
+Machine setup: `./scripts/cloud-setup.sh` installs all of the above, plus
+Blender and GIMP for making assets. It is built to be a Claude Code cloud
+environment's setup script; see [docs/CLOUD_SETUP.md](docs/CLOUD_SETUP.md).
 
 ### Advanced
 

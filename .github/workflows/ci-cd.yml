@@ -26,10 +26,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-          targets: wasm32-unknown-unknown
+        # No args: installs the version, components and targets pinned in
+        # rust-toolchain.toml, so CI and local builds use the same compiler
+        run: rustup toolchain install
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -69,9 +68,9 @@ jobs:
           fetch-depth: 0  # Fetch all history and tags for version detection
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+        # No args: installs the version, components and targets pinned in
+        # rust-toolchain.toml, so CI and local builds use the same compiler
+        run: rustup toolchain install
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -160,9 +159,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+        # Pinned in rust-toolchain.toml; the matrix target goes on top of it
+        shell: bash
+        run: |
+          rustup toolchain install
+          rustup target add ${{ matrix.target }}
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
