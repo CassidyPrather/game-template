@@ -24,6 +24,11 @@ static page. Native desktop builds also work. Crate `game-template`, lib
   external requests; honors `prefers-color-scheme` and
   `prefers-reduced-motion`.
 - `scripts/build-web.sh` — wasm build → `dist/web/`.
+- `scripts/cloud-setup.sh` — machine provisioning (Rust, ALSA, wasm-opt,
+  Blender, GIMP); doubles as a Claude Code cloud environment setup script.
+  See `docs/CLOUD_SETUP.md`.
+- `rust-toolchain.toml` — pins the compiler; CI installs from it too. Bump it
+  together with `rust-version` in `Cargo.toml`.
 - `.github/workflows/ci-cd.yml` — lint, test, audit, size-budgeted web bundle,
   Pages deploy, release artifacts.
 - `benches/` — criterion bench over the sim. Unit tests live in `src/sim.rs`.
