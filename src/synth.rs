@@ -216,8 +216,10 @@ mod tests {
     /// Pull the samples back out of a WAV the way a decoder would.
     fn decode(bytes: &[u8]) -> Vec<i16> {
         bytes[44..]
-            .chunks_exact(2)
-            .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&pair| i16::from_le_bytes(pair))
             .collect()
     }
 

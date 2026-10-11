@@ -595,7 +595,7 @@ mod tests {
                 ..InputFrame::default()
             },
         );
-        assert!(!sim.cues().is_empty());
+        assert_ne!(sim.cues(), []);
 
         sim.advance(TICK_DT, &InputFrame::default());
         assert!(sim.cues().is_empty(), "stale cues: {:?}", sim.cues());

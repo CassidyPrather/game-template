@@ -2,7 +2,7 @@
 name = "game-template"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.99"
 authors = ["Cassidy Prather <pratherea@gmail.com>"]
 description = "Cassidy's opinionated Rust game/toy template"
 readme = "README.md"
